@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: cicdproject
+
+server:
+  port: 9009
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+info:
+  app:
+    name: ${spring.application.name}
+    version: ${APP_VERSION:dev}
