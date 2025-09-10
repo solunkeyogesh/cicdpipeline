@@ -5,7 +5,7 @@ env:
     AWS_REGION: ap-south-1
     ACCOUNT_ID: "784012530518"
     ECR_REPO: cicdpipeline
-    IMAGE_TAG: "$CODEBUILD_RESOLVED_SOURCE_VERSION"  # git sha from CodeBuild
+    IMAGE_TAG: "cicdpipeline-service"   # hardcoded tag
 
 phases:
   install:
@@ -20,10 +20,8 @@ phases:
     commands:
       - echo "Logging in to Amazon ECR..."
       - aws --version
-      - aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 784012530518.dkr.ecr.ap-south-1.amazonaws.com
-      - REPO_URI=784012530518.dkr.ecr.ap-south-1.amazonaws.com/cicdpipeline
-      - IMAGE_TAG="${CODEBUILD_RESOLVED_SOURCE_VERSION:-latest}"
-      - IMAGE_TAG="${IMAGE_TAG:0:12}"
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+      - REPO_URI=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO
       - echo "REPO_URI=$REPO_URI  IMAGE_TAG=$IMAGE_TAG"
 
   build:
@@ -31,15 +29,16 @@ phases:
       - echo "Building Maven artifact..."
       - mvn -q -DskipTests package
       - echo "Building Docker image..."
-      - docker build -t $REPO_URI:$IMAGE_TAG -t $REPO_URI:latest .
+      - docker build -t $REPO_URI:$IMAGE_TAG .
 
   post_build:
     commands:
-      - echo "Pushing Docker images to ECR..."
+      - echo "Pushing Docker image to ECR..."
       - docker push $REPO_URI:$IMAGE_TAG
-      - docker push $REPO_URI:latest
       - echo "Writing imagedefinitions.json for CodePipeline/CodeDeploy..."
-      - printf '[{"name":"cicdproject-container","imageUri":"%s"}]' $REPO_URI:$IMAGE_TAG > imagedefinitions.json
+      - printf '[{"name":"cicdproject-container","imageUri":"%s"}]' "$REPO_URI:$IMAGE_TAG" > imagedefinitions.json
+      - cat imagedefinitions.json
+
 artifacts:
   files:
     - imagedefinitions.json
