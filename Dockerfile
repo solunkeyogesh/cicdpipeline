@@ -7,7 +7,7 @@ COPY src ./src
 RUN mvn -q -DskipTests package
 
 # -------- Run stage --------
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:17-jre 
 WORKDIR /app
 ENV JAVA_OPTS="-Xms256m -Xmx512m"
 # Your app listens on 9009
