@@ -20,7 +20,7 @@ phases:
       - docker --version
       - if ! command -v jq >/dev/null 2>&1; then (apt-get update && apt-get install -y jq) || yum install -y jq; fi
 
-  pre_build:
+  pre_build: 
     commands:
       - echo "Resolving IMAGE_TAG..."
       - |
