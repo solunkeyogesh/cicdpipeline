@@ -36,7 +36,7 @@ phases:
       - echo "Pushing Docker image to ECR..."
       - docker push $REPO_URI:$IMAGE_TAG
       - echo "Writing imagedefinitions.json for CodePipeline/CodeDeploy..."
-      - printf '[{"name":"cicdproject-container","imageUri":"%s"}]' "$REPO_URI:$IMAGE_TAG" > imagedefinitions.json
+      - printf '[{"name":"cicdpipelinecontainer","imageUri":"%s"}]' "$REPO_URI:$IMAGE_TAG" > imagedefinitions.json
       - cat imagedefinitions.json
 
 artifacts:
