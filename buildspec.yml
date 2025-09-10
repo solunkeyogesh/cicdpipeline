@@ -5,8 +5,8 @@ env:
     AWS_REGION: ap-south-1
     ACCOUNT_ID: "784012530518"
     ECR_REPO: cicdpipeline
-    ECS_CLUSTER: "cicd-cluster"
-    ECS_SERVICE: "cicdpipeline-service"
+    ECS_CLUSTER: "cicd-service"
+    ECS_SERVICE: "cicdpipelinetaskdefinition-service"
     ECS_FAMILY: "cicdpipelinetaskdefinition"
     ECS_CONTAINER_NAME: "cicdpipelinecontainer"
 
