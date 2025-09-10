@@ -5,7 +5,6 @@ env:
     AWS_REGION: ap-south-1
     ACCOUNT_ID: "784012530518"
     ECR_REPO: cicdpipeline
-    IMAGE_TAG: "$CODEBUILD_RESOLVED_SOURCE_VERSION"
     ECS_CLUSTER: "cicd-cluster"
     ECS_SERVICE: "cicdpipeline-service"
     ECS_FAMILY: "cicdpipelinetaskdefinition"
@@ -19,16 +18,26 @@ phases:
       - echo "Java & Docker versions"
       - mvn -version
       - docker --version
-      # jq for JSON edits
       - if ! command -v jq >/dev/null 2>&1; then (apt-get update && apt-get install -y jq) || yum install -y jq; fi
 
   pre_build:
     commands:
+      - echo "Resolving IMAGE_TAG..."
+      - |
+        if [ -n "${CODEBUILD_RESOLVED_SOURCE_VERSION:-}" ] && [ "$CODEBUILD_RESOLVED_SOURCE_VERSION" != "unknown" ]; then
+          IMAGE_TAG="${CODEBUILD_RESOLVED_SOURCE_VERSION:0:12}"
+        else
+          IMAGE_TAG="build-${CODEBUILD_BUILD_NUMBER:-local}"
+        fi
+        export IMAGE_TAG
+      - echo "IMAGE_TAG=$IMAGE_TAG"
+
       - echo "Logging in to ECR..."
       - aws --version
       - aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
       - REPO_URI="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO"
-      - echo "REPO_URI=$REPO_URI  IMAGE_TAG=$IMAGE_TAG"
+      - export REPO_URI
+      - echo "REPO_URI=$REPO_URI"
 
   build:
     commands:
