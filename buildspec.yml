@@ -1,0 +1,44 @@
+version: 0.2
+
+env:
+  variables:
+    AWS_REGION: ap-south-1
+    ACCOUNT_ID: "784012530518"
+    ECR_REPO: cicdpipeline
+    IMAGE_TAG: "$CODEBUILD_RESOLVED_SOURCE_VERSION"  # git sha from CodeBuild
+
+phases:
+  install:
+    runtime-versions:
+      java: corretto17
+      docker: 20
+    commands:
+      - echo "Using Java and Docker from the standard image"
+      - mvn -version
+      - docker --version
+
+  pre_build:
+    commands:
+      - echo "Logging in to Amazon ECR..."
+      - aws --version
+      - aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 784012530518.dkr.ecr.ap-south-1.amazonaws.com
+      - REPO_URI=784012530518.dkr.ecr.ap-south-1.amazonaws.com/cicdpipeline
+      - echo "REPO_URI=$REPO_URI"
+
+  build:
+    commands:
+      - echo "Building Maven artifact..."
+      - mvn -q -DskipTests package
+      - echo "Building Docker image..."
+      - docker build -t $REPO_URI:$IMAGE_TAG -t $REPO_URI:latest .
+
+  post_build:
+    commands:
+      - echo "Pushing Docker images to ECR..."
+      - docker push $REPO_URI:$IMAGE_TAG
+      - docker push $REPO_URI:latest
+      - echo "Writing imagedefinitions.json for CodePipeline/CodeDeploy..."
+      - printf '[{"name":"cicdproject-container","imageUri":"%s"}]' $REPO_URI:$IMAGE_TAG > imagedefinitions.json
+artifacts:
+  files:
+    - imagedefinitions.json
