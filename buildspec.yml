@@ -5,10 +5,7 @@ env:
     AWS_REGION: ap-south-1
     ACCOUNT_ID: "784012530518"
     ECR_REPO: cicdpipeline
-    # Use unique tag per build (Git SHA). Much safer deploys + easier rollbacks.
     IMAGE_TAG: "$CODEBUILD_RESOLVED_SOURCE_VERSION"
-
-    # --- ECS names: change only if your names differ ---
     ECS_CLUSTER: "cicd-cluster"
     ECS_SERVICE: "cicdpipeline-service"
     ECS_FAMILY: "cicdpipelinetaskdefinition"
@@ -29,9 +26,8 @@ phases:
     commands:
       - echo "Logging in to ECR..."
       - aws --version
-      - aws ecr get-login-password --region $AWS_REGION \
-          | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
-      - REPO_URI=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO
+      - aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+      - REPO_URI="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO"
       - echo "REPO_URI=$REPO_URI  IMAGE_TAG=$IMAGE_TAG"
 
   build:
@@ -39,56 +35,36 @@ phases:
       - echo "Building Maven artifact..."
       - mvn -q -DskipTests package
       - echo "Building Docker image..."
-      - docker build -t $REPO_URI:$IMAGE_TAG .
-      # (Optional) also tag as latest for convenience
-      - docker tag $REPO_URI:$IMAGE_TAG $REPO_URI:latest
+      - docker build -t "$REPO_URI:$IMAGE_TAG" .
+      - docker tag "$REPO_URI:$IMAGE_TAG" "$REPO_URI:latest"
 
   post_build:
     commands:
       - echo "Pushing images to ECR..."
-      - docker push $REPO_URI:$IMAGE_TAG
-      - docker push $REPO_URI:latest || true
+      - docker push "$REPO_URI:$IMAGE_TAG"
+      - docker push "$REPO_URI:latest" || true
 
       - echo "Fetching current task definition in service..."
-      - CURRENT_TD_ARN=$(aws ecs describe-services \
-          --cluster "$ECS_CLUSTER" \
-          --services "$ECS_SERVICE" \
-          --query 'services[0].taskDefinition' \
-          --output text)
-      - echo "Current TD: $CURRENT_TD_ARN"
+      - CURRENT_TD_ARN=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --query 'services[0].taskDefinition' --output text)
 
       - echo "Exporting current task definition JSON..."
-      - aws ecs describe-task-definition \
-          --task-definition "$CURRENT_TD_ARN" \
-          --query 'taskDefinition' > td.json
+      - aws ecs describe-task-definition --task-definition "$CURRENT_TD_ARN" --query 'taskDefinition' > td.json
 
       - echo "Creating new task definition (swap image only)..."
       - NEW_IMAGE="$REPO_URI:$IMAGE_TAG"
-      - cat td.json | jq --arg IMG "$NEW_IMAGE" --arg CON "$ECS_CONTAINER_NAME" '
-          .containerDefinitions |= map( if .name == $CON then (.image=$IMG) else . end )
-          | del(.taskDefinitionArn,.revision,.status,.registeredAt,.registeredBy,.requiresAttributes,.compatibilities,.tags)
-        ' > td-new.json
+      - cat td.json | jq --arg IMG "$NEW_IMAGE" --arg CON "$ECS_CONTAINER_NAME" '.containerDefinitions |= map( if .name == $CON then (.image=$IMG) else . end ) | del(.taskDefinitionArn,.revision,.status,.registeredAt,.registeredBy,.requiresAttributes,.compatibilities,.tags)' > td-new.json
       - cat td-new.json
 
       - echo "Registering new task definition revision..."
-      - NEW_TD_ARN=$(aws ecs register-task-definition \
-          --cli-input-json file://td-new.json \
-          --query 'taskDefinition.taskDefinitionArn' \
-          --output text)
-      - echo "New TD: $NEW_TD_ARN"
+      - NEW_TD_ARN=$(aws ecs register-task-definition --cli-input-json file://td-new.json --query 'taskDefinition.taskDefinitionArn' --output text)
 
       - echo "Updating ECS service to new task definition..."
-      - aws ecs update-service \
-          --cluster "$ECS_CLUSTER" \
-          --service "$ECS_SERVICE" \
-          --task-definition "$NEW_TD_ARN" \
-          --output text
+      - aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE" --task-definition "$NEW_TD_ARN" --output text
 
       - echo "Waiting for service to become stable..."
       - aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE"
       - echo "✅ Deployment successful."
 
-      # --- Artifacts for rollback + pipeline deploy option ---
       - echo "Writing deploy metadata (for rollback and audit)..."
       - |
         cat > deploy-meta.json <<EOF
@@ -127,7 +103,6 @@ phases:
         EOS
       - chmod +x rollback.sh
 
-      # If you use CodePipeline ECS Deploy stage instead of CLI deploys, keep this file:
       - printf '[{"name":"%s","imageUri":"%s"}]' "$ECS_CONTAINER_NAME" "$REPO_URI:$IMAGE_TAG" > imagedefinitions.json
       - cat imagedefinitions.json
 
